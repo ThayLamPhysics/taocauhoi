@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ tạo câu hỏi JSON (Tích hợp AI)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #analysisResultSection {
+            transition: opacity 0.5s ease-in-out;
+        }
+        .analysis-card, .question-card {
+            transition: all 0.3s ease-in-out;
+        }
+        .question-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .modal-overlay {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .image-preview {
+            max-width: 80px;
+            max-height: 80px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            border: 2px solid #e5e7eb;
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Công cụ tạo câu hỏi JSON (Tích hợp AI)</h1>
+            <p class="text-md text-gray-600 mt-2">Sử dụng AI để tự động nhận dạng câu hỏi và đáp án từ văn bản thô hoặc hình ảnh.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Cột nhập liệu và phân tích -->
+            <div class="bg-white p-6 rounded-xl shadow-lg space-y-6">
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-semibold mb-2 border-b pb-3">Bước 1: Nhập liệu</h2>
+                     <div>
+                        <div class="flex justify-between items-center mb-1">
+                             <label for="apiKey" class="block text-sm font-medium text-gray-700">
+                               API Key của bạn
+                            </label>
+                            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-xs text-indigo-600 hover:underline font-medium">
+                                (Lấy API Key ở đây)
+                            </a>
+                        </div>
+                        <input type="password" id="apiKey" name="apiKey" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Nhập API Key của bạn tại đây">
+                    </div>
+                    <div>
+                        <label for="subject" class="block text-sm font-medium text-gray-700 mb-1">
+                           Chọn môn học cho loạt câu hỏi này
+                        </label>
+                        <select id="subject" name="subject" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                            <option value="chemistry">Hóa học</option>
+                            <option value="physics">Vật lý</option>
+                            <option value="biology">Sinh học</option>
+                            <option value="math">Toán</option>
+                            <option value="history">Lịch sử</option>
+                            <option value="geography">Địa lý</option>
+                            <option value="literature">Ngữ văn</option>
+                            <option value="english">Tiếng Anh</option>
+                            <option value="other">Khác</option>
+                        </select>
+                     </div>
+                    <div>
+                        <label for="rawQuestionText" class="block text-sm font-medium text-gray-700 mb-1">Dán văn bản hoặc hình ảnh câu hỏi vào đây:</label>
+                        <textarea id="rawQuestionText" rows="10" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Dán văn bản hoặc hình ảnh câu hỏi vào đây..."></textarea>
+                    </div>
+                    <button id="analyzeBtn" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <span id="analyzeBtnText">Phân tích văn bản bằng AI</span>
+                        <div id="analyzeBtnSpinner" class="spinner hidden ml-2" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                    </button>
+                </div>
+                
+                <!-- Kết quả phân tích và chọn đáp án -->
+                <div id="analysisResultContainer" class="space-y-6 hidden">
+                     <h2 class="text-2xl font-semibold mb-4 border-b pb-3">Bước 2: Xác nhận và Thêm</h2>
+                     <div id="analysisResultSection" class="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                        <!-- Các thẻ câu hỏi được phân tích sẽ hiện ở đây -->
+                     </div>
+                     <button id="addAllToListBtn" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Thêm tất cả vào danh sách
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cột hiển thị danh sách và JSON -->
+            <div class="space-y-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-4">Danh sách câu hỏi</h2>
+                    <div id="questionsList" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                        <p id="emptyListMessage" class="text-gray-500 text-center py-4">Chưa có câu hỏi nào.</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold text-white">Kết quả JSON</h2>
+                        <!-- NÚT BẤM CHO IMPORT/EXPORT -->
+                        <div class="flex space-x-2">
+                            <button id="importJsonBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-md text-sm">Nhập file</button>
+                            <button id="copyJsonBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md text-sm">Sao chép</button>
+                            <button id="downloadJsonBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md text-sm">Tải xuống</button>
+                            <input type="file" id="importFileInput" class="hidden" accept=".json,application/json">
+                        </div>
+                    </div>
+                    <pre id="jsonOutput" class="bg-gray-900 text-green-300 p-4 rounded-md text-sm overflow-x-auto h-64"><code>// Danh sách câu hỏi sẽ được chuyển thành JSON ở đây...</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-full overflow-y-auto p-6 space-y-4">
+            <h2 class="text-2xl font-bold text-gray-800">Chỉnh sửa câu hỏi</h2>
+            <input type="hidden" id="editQuestionId">
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="editSubject" class="block text-sm font-medium text-gray-700">Môn học</label>
+                    <select id="editSubject" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                </div>
+                <div>
+                    <label for="editQuestionType" class="block text-sm font-medium text-gray-700">Loại câu hỏi</label>
+                    <select id="editQuestionType" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <option value="mc">Trắc nghiệm (MC)</option>
+                        <option value="tf">Đúng/Sai (TF)</option>
+                        <option value="fib">Điền khuyết (FIB)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="editQuestionText" class="block text-sm font-medium text-gray-700">Nội dung câu hỏi</label>
+                <textarea id="editQuestionText" rows="4" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hình ảnh</label>
+                <div class="mt-2 flex items-center space-x-4">
+                    <div id="editImageSpinner" class="spinner hidden"></div>
+                    <img id="editImagePreview" src="" class="image-preview hidden">
+                    <span id="editNoImageText" class="text-gray-500">Chưa có ảnh.</span>
+                    <input type="file" id="editImageInput" class="hidden" accept="image/*">
+                    <button type="button" onclick="document.getElementById('editImageInput').click()" class="text-sm bg-gray-100 text-gray-700 font-semibold py-1 px-3 rounded-full hover:bg-gray-200">Thay đổi</button>
+                    <button type="button" id="removeEditImageBtn" class="text-sm text-red-600 font-semibold hover:underline">Xóa ảnh</button>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Đáp án</label>
+                <div id="editAnswerSection" class="mt-2 space-y-2"></div>
+            </div>
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button id="cancelEditBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded-md">Hủy</button>
+                <button id="saveEditBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md">Lưu thay đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="messageBox" class="fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white" style="display: none;"></div>
+
+    <script>
+        // DOM Elements
+        const apiKeyInput = document.getElementById('apiKey');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const analyzeBtnText = document.getElementById('analyzeBtnText');
+        const analyzeBtnSpinner = document.getElementById('analyzeBtnSpinner');
+        const rawQuestionText = document.getElementById('rawQuestionText');
+        const analysisResultContainer = document.getElementById('analysisResultContainer');
+        const analysisResultSection = document.getElementById('analysisResultSection');
+        const addAllToListBtn = document.getElementById('addAllToListBtn');
+        const subjectSelect = document.getElementById('subject');
+        const questionsList = document.getElementById('questionsList');
+        const jsonOutput = document.querySelector('#jsonOutput code');
+        const copyJsonBtn = document.getElementById('copyJsonBtn');
+        const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+        const messageBox = document.getElementById('messageBox');
+        const importJsonBtn = document.getElementById('importJsonBtn');
+        const importFileInput = document.getElementById('importFileInput');
+        
+        // Modal Elements
+        const editModal = document.getElementById('editModal');
+        const editQuestionIdInput = document.getElementById('editQuestionId');
+        const editSubjectSelect = document.getElementById('editSubject');
+        const editQuestionTypeSelect = document.getElementById('editQuestionType');
+        const editQuestionText = document.getElementById('editQuestionText');
+        const editAnswerSection = document.getElementById('editAnswerSection');
+        const saveEditBtn = document.getElementById('saveEditBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const editImagePreview = document.getElementById('editImagePreview');
+        const editImageInput = document.getElementById('editImageInput');
+        const removeEditImageBtn = document.getElementById('removeEditImageBtn');
+        const editNoImageText = document.getElementById('editNoImageText');
+        const editImageSpinner = document.getElementById('editImageSpinner');
+
+        // State
+        let questions = [];
+        let parsedQuestions = [];
+
+        // --- AI Analysis Logic ---
+        async function analyzeTextWithAI() {
+            const apiKey = apiKeyInput.value.trim();
+            const text = rawQuestionText.value.trim();
+
+            if (!apiKey) {
+                showMessage('Vui lòng nhập API Key của bạn.', true);
+                return;
+            }
+            if (!text) {
+                showMessage('Vui lòng nhập nội dung câu hỏi.', true);
+                return;
+            }
+
+            setLoadingState(true, 'Đang phân tích văn bản...');
+            
+            // UPDATED: Added rule for True/False answer detection
+            const prompt = `
+                Analyze the following text which contains one or more questions. For each question, identify its type, the question text, its options, and its answer if provided.
+                The possible types are:
+                - "mc": Multiple choice question with 2 or more options.
+                - "tf": A question that doesn't have options or looks like a True/False statement.
+                - "fib": A question that contains "..." OR a question that asks for a calculation and provides an answer key at the end (e.g., "(ĐS: ...)", "(Đáp án: ...)", "(Answer: ...)")
+
+                RULES:
+                1.  **Remove Question Numbers:** Before processing, remove any leading question numbers like "Câu 1:", "Bài 4.", "Question 2.", etc., from the question text. The final 'question' field should not contain this prefix.
+                2.  **Answer Detection (FIB):** If you identify a question as "fib" because it has an answer key, extract the answer from the key and put it in the "answer" field. Also, remove the answer key from the question text itself.
+                3.  **Answer Detection (TF):** If a statement ends with a single letter "Đ" (for "Đúng") or "S" (for "Sai"), classify it as a "tf" question. Set the 'answer' field to "true" for "Đ" and "false" for "S". Remove the trailing "Đ" or "S" from the question text.
+                4.  **Formatting (Sup/Sub):** In the output 'question' and 'options' text, find any text that should be a superscript or subscript.
+                    - Use <sup>...</sup> for superscripts (e.g., convert "x^2" to "x<sup>2</sup>").
+                    - Use <sub>...</sub> for subscripts (e.g., convert "H_2O" to "H<sub>2</sub>O").
+                    Apply this HTML tagging to all relevant parts of the text.
+
+                Here is the text to analyze:
+                ---
+                ${text}
+                ---
+            `;
+
+            const schema = {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        type: { type: "STRING", enum: ["mc", "tf", "fib"] },
+                        question: { type: "STRING" },
+                        options: {
+                            type: "ARRAY",
+                            items: { type: "STRING" }
+                        },
+                        answer: { type: "STRING" }
+                    },
+                    required: ["type", "question"]
+                }
+            };
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+
+            try {
+                await callGeminiAPI(payload);
+            } catch (error) {
+                console.error("AI Text Analysis Error:", error);
+                showMessage(`Lỗi phân tích AI: ${error.message}`, true);
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function analyzeImageWithAI(base64ImageData) {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showMessage('Vui lòng nhập API Key trước khi dán ảnh.', true);
+                return;
+            }
+            
+            setLoadingState(true, 'Đang nhận dạng ảnh...');
+
+            // UPDATED: Added rule for True/False answer detection
+            const prompt = `
+                Look at the image, extract all text, and then analyze it. For each question, identify its type, the question text, its options, and its answer if provided.
+                The possible types are:
+                - "mc": Multiple choice question with 2 or more options.
+                - "tf": A question that doesn't have options or looks like a True/False statement.
+                - "fib": A question that contains "..." OR a question that asks for a calculation and provides an answer key at the end (e.g., "(ĐS: ...)", "(Đáp án: ...)", "(Answer: ...)")
+
+                RULES:
+                1.  **Remove Question Numbers:** Before processing, remove any leading question numbers like "Câu 1:", "Bài 4.", "Question 2.", etc., from the question text. The final 'question' field should not contain this prefix.
+                2.  **Answer Detection (MC):** For "mc" questions, carefully examine the image for visual cues indicating the correct answer. This could be text that is colored (especially red), underlined, bolded, or circled. If you find such a highlighted option, set the "answer" field to its zero-based index as a string (e.g., "0" for A, "1" for B, "2" for C, "3" for D).
+                3.  **Answer Detection (FIB):** If you identify a question as "fib" because it has an answer key (e.g., "(ĐS: ...)") extract the answer from the key and put it in the "answer" field. Also, remove the answer key from the question text itself.
+                4.  **Answer Detection (TF):** If a statement ends with a single letter "Đ" (for "Đúng") or "S" (for "Sai"), especially if it's visually distinct, classify it as a "tf" question. Set the 'answer' field to "true" for "Đ" and "false" for "S". Remove the trailing "Đ" or "S" from the question text.
+                5.  **Formatting (Sup/Sub):** In the output 'question' and 'options' text, find any text that should be a superscript or subscript.
+                    - Use <sup>...</sup> for superscripts (e.g., convert "x^2" to "x<sup>2</sup>").
+                    - Use <sub>...</sub> for subscripts (e.g., convert "H_2O" to "H<sub>2</sub>O").
+                    Apply this HTML tagging to all relevant parts of the text.
+            `;
+            
+             const schema = {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        type: { type: "STRING", enum: ["mc", "tf", "fib"] },
+                        question: { type: "STRING" },
+                        options: {
+                            type: "ARRAY",
+                            items: { type: "STRING" }
+                        },
+                        answer: { type: "STRING" }
+                    },
+                    required: ["type", "question"]
+                }
+            };
+
+            const payload = {
+                contents: [
+                    {
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: "image/png",
+                                    data: base64ImageData
+                                }
+                            }
+                        ]
+                    }
+                ],
+                 generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema
+                }
+            };
+
+            try {
+                await callGeminiAPI(payload);
+            } catch (error) {
+                console.error("AI Image Analysis Error:", error);
+                showMessage(`Lỗi phân tích ảnh AI: ${error.message}`, true);
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        async function callGeminiAPI(payload) {
+            const apiKey = apiKeyInput.value.trim();
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `Lỗi API: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.candidates || result.candidates.length === 0) {
+                 throw new Error("API không trả về kết quả hợp lệ.");
+            }
+
+            const jsonString = result.candidates[0].content.parts[0].text;
+            parsedQuestions = JSON.parse(jsonString);
+            
+            if (!parsedQuestions || parsedQuestions.length === 0) {
+                    throw new Error("AI không nhận diện được câu hỏi nào.");
+            }
+
+            displayAnalysisResults(parsedQuestions);
+        }
+
+        rawQuestionText.addEventListener('paste', (event) => {
+            const items = (event.clipboardData || window.clipboardData).items;
+            let imageFile = null;
+
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    imageFile = item.getAsFile();
+                    break;
+                }
+            }
+
+            if (imageFile) {
+                event.preventDefault();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64Data = e.target.result.split(',')[1];
+                    analyzeImageWithAI(base64Data);
+                };
+                reader.readAsDataURL(imageFile);
+            }
+        });
+
+        function setLoadingState(isLoading, message = 'Phân tích văn bản bằng AI') {
+            if (isLoading) {
+                analyzeBtn.disabled = true;
+                analyzeBtnText.textContent = message;
+                analyzeBtnSpinner.classList.remove('hidden');
+            } else {
+                analyzeBtn.disabled = false;
+                analyzeBtnText.textContent = 'Phân tích văn bản bằng AI';
+                analyzeBtnSpinner.classList.add('hidden');
+            }
+        }
+
+
+        analyzeBtn.addEventListener('click', analyzeTextWithAI);
+
+        function displayAnalysisResults(results) {
+            analysisResultSection.innerHTML = '';
+            results.forEach((parsedData, index) => {
+                const card = createAnalysisCard(parsedData, index);
+                analysisResultSection.appendChild(card);
+            });
+            analysisResultContainer.classList.remove('hidden');
+            showMessage(`AI đã phân tích xong ${results.length} câu hỏi. Vui lòng xác nhận đáp án.`, false);
+        }
+        
+        // UPDATED: createAnalysisCard to pre-select answer for TF questions
+        function createAnalysisCard(parsedData, index) {
+            const card = document.createElement('div');
+            card.className = 'analysis-card bg-gray-50 p-4 rounded-lg border border-gray-200';
+            card.dataset.index = index;
+            let answerHtml = '';
+            switch (parsedData.type) {
+                case 'mc':
+                    answerHtml = (parsedData.options || []).map((option, optIndex) => {
+                        const isChecked = parsedData.answer !== undefined && parseInt(parsedData.answer) === optIndex;
+                        return `
+                        <label class="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                            <input type="radio" name="answer-${index}" value="${optIndex}" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" ${isChecked ? 'checked' : ''}>
+                            <span class="ml-3 text-sm text-gray-700">${option}</span>
+                        </label>
+                    `}).join('');
+                    break;
+                case 'tf':
+                    const isTrueChecked = parsedData.answer === 'true';
+                    const isFalseChecked = parsedData.answer === 'false';
+                    answerHtml = `
+                        <label class="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                            <input type="radio" name="answer-${index}" value="true" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" ${isTrueChecked ? 'checked' : ''}>
+                            <span class="ml-3 text-gray-700">Đúng (True)</span>
+                        </label>
+                        <label class="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                            <input type="radio" name="answer-${index}" value="false" class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" ${isFalseChecked ? 'checked' : ''}>
+                            <span class="ml-3 text-gray-700">Sai (False)</span>
+                        </label>
+                    `;
+                    break;
+                case 'fib':
+                    const prefilledAnswer = parsedData.answer || '';
+                    answerHtml = `
+                        <input type="text" id="fibAnswer-${index}" placeholder="Nhập đáp án đúng..." class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="${prefilledAnswer}">
+                    `;
+                    break;
+            }
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <p class="font-medium text-gray-800">${parsedData.question}</p>
+                    <div class="text-right">
+                        <input type="file" id="imageInput-${index}" class="hidden" accept="image/*" onchange="handleImageUpload(event, ${index})">
+                        <button type="button" onclick="document.getElementById('imageInput-${index}').click()" class="text-xs bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-full hover:bg-gray-300">Thêm ảnh</button>
+                    </div>
+                </div>
+                <div id="imagePreviewContainer-${index}" class="mt-2 flex items-center"><div class="spinner hidden"></div></div>
+                <div class="mt-2 space-y-1">${answerHtml}</div>
+            `;
+            return card;
+        }
+        
+        async function uploadImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => {
+                    showMessage('Không thể đọc tệp hình ảnh.', true);
+                    resolve(null);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        window.handleImageUpload = async function(event, index) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const previewContainer = document.getElementById(`imagePreviewContainer-${index}`);
+            const spinner = previewContainer.querySelector('.spinner');
+            spinner.classList.remove('hidden');
+
+            const imageUrl = await uploadImage(file);
+            spinner.classList.add('hidden');
+
+            if (imageUrl) {
+                parsedQuestions[index].imageUrl = imageUrl; 
+                previewContainer.innerHTML = `<img src="${imageUrl}" class="image-preview">`;
+                showMessage('Đã thêm ảnh thành công!', false);
+            } else {
+                showMessage(`Không thể xử lý ảnh.`, true);
+            }
+        }
+
+        function getNextId(shortType, subject, currentBatchIds) {
+            const subjectPrefixes = {
+                'chemistry': 'C',
+                'physics': 'P',
+                'biology': 'B'
+            };
+
+            const allIds = [...questions.map(q => q.id), ...currentBatchIds];
+            let maxNum = 0;
+            let finalPrefix;
+
+            if (subjectPrefixes[subject]) {
+                finalPrefix = subjectPrefixes[subject];
+                const regex = new RegExp(`^${finalPrefix}(\\d+)$`);
+                const allIdsWithPrefix = allIds.filter(id => id && regex.test(id));
+                
+                if (allIdsWithPrefix.length > 0) {
+                    maxNum = Math.max(...allIdsWithPrefix.map(id => parseInt(id.replace(finalPrefix, '')) || 0));
+                }
+                return `${finalPrefix}${maxNum + 1}`;
+
+            } else {
+                finalPrefix = `${shortType}_t`;
+                const allIdsWithPrefix = allIds.filter(id => id && id.startsWith(finalPrefix));
+                 if (allIdsWithPrefix.length > 0) {
+                    maxNum = Math.max(...allIdsWithPrefix.map(id => parseInt(id.replace(finalPrefix, '')) || 0));
+                }
+                return `${finalPrefix}${maxNum + 1}`;
+            }
+        }
+
+        addAllToListBtn.addEventListener('click', () => {
+            let addedCount = 0;
+            const newQuestions = [];
+            const tempIds = []; 
+            const selectedSubject = subjectSelect.value; 
+
+            document.querySelectorAll('.analysis-card').forEach(card => {
+                const index = parseInt(card.dataset.index);
+                const parsedData = parsedQuestions[index];
+                
+                const questionData = { 
+                    type: parsedData.type, 
+                    question: parsedData.question,
+                    subject: selectedSubject 
+                };
+                
+                if(parsedData.options) {
+                    questionData.options = parsedData.options;
+                }
+
+                const imgElement = card.querySelector(`#imagePreviewContainer-${index} img`);
+                if (imgElement && imgElement.src) {
+                    questionData.imageUrl = imgElement.src;
+                }
+
+                switch(parsedData.type) {
+                    case 'mc':
+                        const selectedOption = card.querySelector(`input[name="answer-${index}"]:checked`);
+                        if (selectedOption) {
+                            questionData.answer = parseInt(selectedOption.value);
+                        } else if (parsedData.answer !== undefined) { 
+                            questionData.answer = parseInt(parsedData.answer);
+                        }
+                        break;
+                    case 'tf':
+                        const selectedTFOption = card.querySelector(`input[name="answer-${index}"]:checked`);
+                        if (selectedTFOption) {
+                            questionData.answer = selectedTFOption.value === 'true';
+                        } else if (parsedData.answer !== undefined) {
+                             questionData.answer = parsedData.answer === 'true';
+                        }
+                        break;
+                    case 'fib':
+                        const fibAnswer = card.querySelector(`#fibAnswer-${index}`).value.trim();
+                        if (fibAnswer) questionData.answer = fibAnswer;
+                        break;
+                }
+                
+                const newId = getNextId(parsedData.type, selectedSubject, tempIds);
+                questionData.id = newId;
+                tempIds.push(newId);
+
+                newQuestions.push(questionData);
+                addedCount++;
+            });
+            
+            if(newQuestions.length > 0) {
+                questions = [...questions, ...newQuestions];
+                renderQuestionsList();
+                updateJsonOutput();
+            }
+            rawQuestionText.value = '';
+            analysisResultContainer.classList.add('hidden');
+            analysisResultSection.innerHTML = '';
+            parsedQuestions = [];
+            if(addedCount > 0){
+                 showMessage(`Đã thêm thành công ${addedCount} câu hỏi vào danh sách!`, false);
+            }
+        });
+
+        // --- UI Rendering & Helpers ---
+        function renderQuestionsList() {
+             const emptyMsg = document.getElementById('emptyListMessage');
+            if (questions.length === 0) {
+                questionsList.innerHTML = '<p id="emptyListMessage" class="text-gray-500 text-center py-4">Chưa có câu hỏi nào.</p>';
+            } else {
+                if(emptyMsg) emptyMsg.remove();
+                questionsList.innerHTML = '';
+                const sortedQuestions = [...questions].sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
+                sortedQuestions.forEach((q) => {
+                    const card = document.createElement('div');
+                    const isUnanswered = q.answer === undefined || q.answer === null || q.answer === '';
+                    card.className = `question-card bg-gray-50 p-4 rounded-lg border shadow-sm ${isUnanswered ? 'border-red-400 border-l-4' : 'border-gray-200'}`;
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-bold text-indigo-700">${q.id} - (${q.type})</p>
+                                <p class="mt-1 text-gray-800">${q.question}</p>
+                                ${q.imageUrl ? `<img src="${q.imageUrl}" class="image-preview mt-2">` : ''}
+                                ${isUnanswered ? '<p class="text-xs text-red-600 font-semibold mt-2">Chưa có đáp án</p>' : ''}
+                            </div>
+                            <div class="flex flex-col items-end space-y-2">
+                                <button onclick="openEditModal('${q.id}')" class="text-xs bg-blue-100 text-blue-700 font-semibold py-1 px-3 rounded-full hover:bg-blue-200">Chỉnh sửa</button>
+                                <button onclick="removeQuestion('${q.id}')" class="text-xs bg-gray-100 text-gray-600 font-semibold py-1 px-3 rounded-full hover:bg-gray-200">&times; Xóa</button>
+                            </div>
+                        </div>
+                    `;
+                    questionsList.appendChild(card);
+                });
+            }
+        }
+
+        function updateJsonOutput() {
+            if (questions.length === 0) {
+                jsonOutput.textContent = '// Danh sách câu hỏi sẽ được chuyển thành JSON ở đây...';
+                return;
+            }
+            const sortedQuestions = [...questions].sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
+            const jsonString = JSON.stringify(sortedQuestions, null, 2);
+            jsonOutput.textContent = jsonString;
+        }
+
+        // --- Edit Modal Logic ---
+        
+        function renderEditAnswerSection(question) {
+            editAnswerSection.innerHTML = '';
+            switch(question.type) {
+                case 'mc':
+                    const options = question.options && question.options.length > 0 ? question.options : ['', '', '', ''];
+                    editAnswerSection.innerHTML = options.map((option, index) => `
+                        <div class="flex items-center p-2 rounded-md hover:bg-gray-100">
+                            <input type="radio" name="editAnswer" value="${index}" class="h-4 w-4 text-indigo-600" ${question.answer === index ? 'checked' : ''}>
+                            <input type="text" class="ml-3 text-sm text-gray-700 border-b w-full focus:outline-none focus:border-indigo-500" value="${option}">
+                            <button type="button" onclick="removeOption(this)" class="ml-2 text-red-500 font-bold">&times;</button>
+                        </div>
+                    `).join('') + '<button type="button" onclick="addOption()" class="mt-2 text-sm text-indigo-600 hover:underline">Thêm lựa chọn</button>';
+                    break;
+                case 'tf':
+                    editAnswerSection.innerHTML = `
+                        <label class="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                            <input type="radio" name="editAnswer" value="true" class="h-4 w-4 text-indigo-600" ${question.answer === true ? 'checked' : ''}>
+                            <span class="ml-3 text-gray-700">Đúng (True)</span>
+                        </label>
+                        <label class="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                            <input type="radio" name="editAnswer" value="false" class="h-4 w-4 text-indigo-600" ${question.answer === false ? 'checked' : ''}>
+                            <span class="ml-3 text-gray-700">Sai (False)</span>
+                        </label>
+                    `;
+                    break;
+                case 'fib':
+                    const answerText = (question.answer !== undefined && question.answer !== null) ? question.answer : '';
+                    editAnswerSection.innerHTML = `
+                        <input type="text" id="editFibAnswer" placeholder="Nhập đáp án đúng..." class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3" value="${answerText}">
+                    `;
+                    break;
+            }
+        }
+
+        window.addOption = function() {
+            const container = document.getElementById('editAnswerSection');
+            const newOptionDiv = document.createElement('div');
+            newOptionDiv.className = 'flex items-center p-2 rounded-md hover:bg-gray-100';
+            newOptionDiv.innerHTML = `
+                <input type="radio" name="editAnswer" value="${container.querySelectorAll('input[type=radio]').length}" class="h-4 w-4 text-indigo-600">
+                <input type="text" class="ml-3 text-sm text-gray-700 border-b w-full focus:outline-none focus:border-indigo-500" value="">
+                <button type="button" onclick="removeOption(this)" class="ml-2 text-red-500 font-bold">&times;</button>
+            `;
+            container.insertBefore(newOptionDiv, container.lastChild);
+        }
+
+        window.removeOption = function(button) {
+            button.parentElement.remove();
+        }
+
+        window.openEditModal = function(questionId) {
+            const question = questions.find(q => q.id === questionId);
+            if (!question) return;
+
+            editQuestionIdInput.value = questionId;
+            editQuestionText.value = question.question;
+            editQuestionTypeSelect.value = question.type;
+            
+            editSubjectSelect.innerHTML = '';
+            Array.from(subjectSelect.options).forEach(opt => {
+                const newOpt = document.createElement('option');
+                newOpt.value = opt.value;
+                newOpt.textContent = opt.textContent;
+                if (opt.value === question.subject) newOpt.selected = true;
+                editSubjectSelect.appendChild(newOpt);
+            });
+
+            if (question.imageUrl) {
+                editImagePreview.src = question.imageUrl;
+                editImagePreview.classList.remove('hidden');
+                editNoImageText.classList.add('hidden');
+                removeEditImageBtn.classList.remove('hidden');
+            } else {
+                editImagePreview.src = '';
+                editImagePreview.classList.add('hidden');
+                editNoImageText.classList.remove('hidden');
+                removeEditImageBtn.classList.add('hidden');
+            }
+
+            renderEditAnswerSection(question);
+            editModal.classList.remove('hidden');
+        }
+
+        editQuestionTypeSelect.addEventListener('change', (event) => {
+            const questionId = editQuestionIdInput.value;
+            const question = questions.find(q => q.id === questionId);
+            if (!question) return;
+
+            const newType = event.target.value;
+            const tempQuestion = { ...question, type: newType, answer: undefined };
+            renderEditAnswerSection(tempQuestion);
+        });
+
+        editImageInput.onchange = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            editImageSpinner.classList.remove('hidden');
+            editImagePreview.classList.add('hidden');
+            editNoImageText.classList.add('hidden');
+
+            const imageUrl = await uploadImage(file);
+            editImageSpinner.classList.add('hidden');
+
+            if (imageUrl) {
+                editImagePreview.src = imageUrl;
+                editImagePreview.classList.remove('hidden');
+                removeEditImageBtn.classList.remove('hidden');
+            } else {
+                 editNoImageText.classList.remove('hidden');
+                 showMessage('Không thể xử lý ảnh.', true);
+            }
+        }
+
+        removeEditImageBtn.onclick = function() {
+            editImagePreview.src = '';
+            editImageInput.value = '';
+            editImagePreview.classList.add('hidden');
+            editNoImageText.classList.remove('hidden');
+            removeEditImageBtn.classList.add('hidden');
+        }
+
+        cancelEditBtn.addEventListener('click', () => editModal.classList.add('hidden'));
+
+        saveEditBtn.addEventListener('click', () => {
+            const questionId = editQuestionIdInput.value;
+            const questionIndex = questions.findIndex(q => q.id === questionId);
+            if (questionIndex === -1) return;
+
+            const question = questions[questionIndex];
+            const newType = editQuestionTypeSelect.value;
+            
+            question.type = newType;
+            question.subject = editSubjectSelect.value;
+            question.question = editQuestionText.value;
+            question.imageUrl = editImagePreview.src.startsWith('http') ? editImagePreview.src : (editImagePreview.src.startsWith('data:image') ? editImagePreview.src : undefined);
+
+            // Reset answer and options before saving based on the new type
+            question.answer = undefined;
+            delete question.options;
+
+            switch(newType) {
+                case 'mc':
+                    const selectedOption = editAnswerSection.querySelector('input[name="editAnswer"]:checked');
+                    question.answer = selectedOption ? parseInt(selectedOption.value) : undefined;
+                    const optionInputs = editAnswerSection.querySelectorAll('input[type="text"]');
+                    question.options = Array.from(optionInputs).map(input => input.value);
+                    break;
+                case 'tf':
+                    const selectedTFOption = editAnswerSection.querySelector('input[name="editAnswer"]:checked');
+                    question.answer = selectedTFOption ? (selectedTFOption.value === 'true') : undefined;
+                    break;
+                case 'fib':
+                    const fibAnswer = document.getElementById('editFibAnswer').value.trim();
+                    question.answer = fibAnswer ? fibAnswer : undefined;
+                    break;
+            }
+
+            renderQuestionsList();
+            updateJsonOutput();
+            editModal.classList.add('hidden');
+            showMessage(`Đã cập nhật câu hỏi ${question.id}`, false);
+        });
+
+        window.removeQuestion = function(questionId) {
+            questions = questions.filter(q => q.id !== questionId);
+            renderQuestionsList();
+            updateJsonOutput();
+            showMessage('Đã xóa câu hỏi.', false);
+        }
+
+        copyJsonBtn.addEventListener('click', function() {
+            const jsonText = jsonOutput.textContent;
+            if (questions.length > 0 && !jsonText.startsWith('//')) {
+                const textarea = document.createElement('textarea');
+                textarea.value = jsonText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showMessage('Đã sao chép vào clipboard!', false);
+                } catch (err) {
+                    showMessage('Sao chép thất bại!', true);
+                }
+                document.body.removeChild(textarea);
+            } else {
+                showMessage('Không có gì để sao chép.', true);
+            }
+        });
+        
+        downloadJsonBtn.addEventListener('click', function() {
+            const jsonText = jsonOutput.textContent;
+            if (questions.length > 0 && !jsonText.startsWith('//')) {
+                const blob = new Blob([jsonText], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'questions.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showMessage('Bắt đầu tải xuống...', false);
+            } else {
+                showMessage('Không có gì để tải xuống.', true);
+            }
+        });
+
+        // --- Import Logic with Fallback for old format ---
+        importJsonBtn.addEventListener('click', () => {
+            importFileInput.click();
+        });
+
+        importFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let importedData;
+                try {
+                    importedData = JSON.parse(e.target.result);
+                } catch (initialError) {
+                    try {
+                        let text = e.target.result.trim();
+                        if (text.endsWith(';')) {
+                            text = text.slice(0, -1);
+                        }
+                        text = text.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+                        text = text.replace(/'/g, '"');
+                        
+                        importedData = JSON.parse(text);
+
+                    } catch (fallbackError) {
+                        showMessage(`Lỗi khi nhập tệp: Định dạng không hợp lệ.`, true);
+                        return;
+                    }
+                }
+
+                if (!Array.isArray(importedData)) {
+                    showMessage('Lỗi: Tệp JSON phải chứa một mảng các câu hỏi.', true);
+                    return;
+                }
+                
+                const isValid = importedData.every(q => q && typeof q.id === 'string' && typeof q.type === 'string' && typeof q.question === 'string');
+                if (!isValid) {
+                     showMessage('Lỗi: Một hoặc nhiều câu hỏi trong tệp bị thiếu các trường bắt buộc (id, type, question).', true);
+                     return;
+                }
+
+                questions = importedData;
+                renderQuestionsList();
+                updateJsonOutput();
+                showMessage(`Đã nhập thành công ${questions.length} câu hỏi.`, false);
+                importFileInput.value = '';
+            };
+            reader.onerror = () => {
+                showMessage('Không thể đọc tệp.', true);
+            };
+            reader.readAsText(file);
+        });
+
+        function showMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.className = `fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-500' : 'bg-green-500'}`;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+
+</body>
+</html>
